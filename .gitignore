@@ -1,0 +1,46 @@
+# Personal sys instructions (keep private)
+sys_instructions_ian_turner.txt
+
+# Node modules (if any)
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+
+# API keys and secrets
+.env
+.env.local
+.env.production
+.env.test
+
+# Build outputs
+dist/
+build/
