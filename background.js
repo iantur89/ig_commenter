@@ -8,7 +8,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 async function handleOpenAICall(request, sendResponse) {
   try {
-    const { screenshot, apiKey, systemInstructions } = request;
+    const { screenshot, apiKey, systemInstructions, platform } = request;
     
     if (!apiKey) {
       sendResponse({ success: false, error: 'OpenAI API key not provided' });
@@ -25,6 +25,11 @@ async function handleOpenAICall(request, sendResponse) {
       return;
     }
 
+    // Platform-specific user message for the API call
+    const userMessageText = platform === 'x'
+      ? 'Please read the tweet/reply content from this screenshot and generate an appropriate reply following the instructions. Keep replies under 280 characters for X/Twitter.'
+      : 'Please read the Instagram post caption from this screenshot and generate an appropriate comment following the instructions.';
+
     // Prepare the messages for the API call
     const messages = [
       {
@@ -36,7 +41,7 @@ async function handleOpenAICall(request, sendResponse) {
         content: [
           {
             type: 'text',
-            text: 'Please read the Instagram post caption from this screenshot and generate an appropriate comment following the instructions.'
+            text: userMessageText
           },
           {
             type: 'image_url',
@@ -109,6 +114,12 @@ async function handleOpenAICall(request, sendResponse) {
       
       // Replace em dashes with ellipsis to look more natural
       generatedComment = generatedComment.replace(/—/g, '...');
+      
+      // Truncate for X/Twitter 280-character limit
+      if (platform === 'x' && generatedComment.length > 280) {
+        generatedComment = generatedComment.slice(0, 277) + '...';
+        console.log('Truncated for X 280-char limit:', generatedComment);
+      }
       
       console.log('After em dash replacement:', generatedComment);
       console.log('Final comment being sent to popup:', generatedComment);

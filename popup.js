@@ -208,21 +208,31 @@ class PopupController {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       
-      if (!tab.url.includes('instagram.com')) {
-        this.showStatus('Please navigate to an Instagram post first', 'error');
-        return;
-      }
-
-      // Check if we're on a specific post page (not just the main feed)
-      if (!tab.url.includes('/p/') && !tab.url.includes('/reel/')) {
-        this.showStatus('Please navigate to a specific Instagram post or reel first', 'error');
+      // Platform detection and URL validation
+      let platform = null;
+      if (tab.url.includes('instagram.com')) {
+        if (tab.url.includes('/p/') || tab.url.includes('/reel/')) {
+          platform = 'instagram';
+        } else {
+          this.showStatus('Please navigate to a specific Instagram post or reel first', 'error');
+          return;
+        }
+      } else if (tab.url.includes('x.com') || tab.url.includes('twitter.com')) {
+        if (tab.url.includes('/status/')) {
+          platform = 'x';
+        } else {
+          this.showStatus('Please navigate to a specific tweet page first', 'error');
+          return;
+        }
+      } else {
+        this.showStatus('Please navigate to an Instagram post or X tweet page first', 'error');
         return;
       }
 
       // Check if content script is loaded
       const contentScriptLoaded = await this.checkContentScriptLoaded(tab.id);
       if (!contentScriptLoaded) {
-        this.showStatus('Content script not loaded. Please refresh the Instagram page and try again.', 'error');
+        this.showStatus('Content script not loaded. Please refresh the page and try again.', 'error');
         return;
       }
 
@@ -247,22 +257,24 @@ class PopupController {
         action: 'callOpenAI',
         screenshot: screenshot,
         apiKey: apiKey,
-        systemInstructions: systemInstructions
+        systemInstructions: systemInstructions,
+        platform: platform
       });
 
       if (response.success && response.comment) {
-        this.showStatus('Comment generated! Injecting into Instagram...', 'success');
+        this.showStatus('Comment generated! Injecting...', 'success');
         
-        // Inject comment into Instagram
+        // Inject comment into page
         try {
           await chrome.tabs.sendMessage(tab.id, {
             action: 'injectComment',
-            comment: response.comment
+            comment: response.comment,
+            platform: platform
           });
           this.showStatus('✅ Comment injected successfully!', 'success');
         } catch (injectError) {
           console.error('Failed to inject comment:', injectError);
-          this.showStatus('Comment generated but failed to inject. Try refreshing the Instagram page.', 'error');
+          this.showStatus('Comment generated but failed to inject. Try refreshing the page.', 'error');
         }
       } else {
         this.showStatus(response.error || 'Failed to generate comment', 'error');

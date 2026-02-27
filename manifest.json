@@ -1,14 +1,16 @@
 {
   "manifest_version": 3,
-  "name": "IG Comment Generator",
-  "version": "1.0",
-  "description": "Generate AI-powered comments for Instagram posts based on the caption content",
+  "name": "IG & X Comment Generator",
+  "version": "1.1",
+  "description": "Generate AI-powered comments for Instagram posts and X/Twitter replies",
   "permissions": [
     "activeTab",
     "storage"
   ],
   "host_permissions": [
     "https://www.instagram.com/*",
+    "https://x.com/*",
+    "https://twitter.com/*",
     "https://api.openai.com/*"
   ],
   "background": {
@@ -18,11 +20,15 @@
     {
       "matches": ["https://www.instagram.com/*"],
       "js": ["content.js"]
+    },
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["content.js"]
     }
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "IG Comment Generator"
+    "default_title": "IG & X Comment Generator"
   },
   "icons": {
     "16": "icon16.png",

@@ -1,28 +1,49 @@
-// Content script for Instagram comment injection
-class InstagramCommentInjector {
+// Content script for Instagram and X/Twitter comment injection
+class CommentInjector {
   constructor() {
     this.init();
   }
 
   init() {
-    console.log('🚀 Instagram Comment Injector loaded');
-    
+    const platform = this.detectPlatform();
+    console.log(`🚀 Comment Injector loaded (${platform})`);
+
     // Listen for messages from popup
     chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (request.action === 'ping') {
         console.log('🏓 Received ping - content script is ready');
-        sendResponse({status: 'ready'});
+        sendResponse({ status: 'ready' });
       } else if (request.action === 'injectComment') {
         console.log('📨 Received injectComment message');
-        this.injectComment(request.comment);
-        sendResponse({status: 'success'});
+        this.injectComment(request.comment, request.platform);
+        sendResponse({ status: 'success' });
       }
       return true;
     });
   }
 
-  findCommentInput() {
-    // Multiple selectors for the comment input field
+  detectPlatform() {
+    const host = window.location.hostname;
+    if (host.includes('instagram.com')) return 'instagram';
+    if (host.includes('x.com') || host.includes('twitter.com')) return 'x';
+    return 'unknown';
+  }
+
+  findCommentInput(platform) {
+    const effectivePlatform = platform || this.detectPlatform();
+
+    if (effectivePlatform === 'instagram') {
+      return this.findInstagramCommentInput();
+    }
+    if (effectivePlatform === 'x') {
+      return this.findXReplyInput();
+    }
+
+    // Fallback: try both
+    return this.findInstagramCommentInput() || this.findXReplyInput();
+  }
+
+  findInstagramCommentInput() {
     const selectors = [
       'textarea[placeholder*="comment"]',
       'textarea[aria-label*="comment"]',
@@ -34,62 +55,102 @@ class InstagramCommentInjector {
 
     for (const selector of selectors) {
       const element = document.querySelector(selector);
-      if (element && element.offsetParent !== null) { // Element is visible
-        console.log(`✅ Found comment input with selector: ${selector}`);
-        return element;
+      if (element && element.offsetParent !== null) {
+        console.log(`✅ Found Instagram comment input with selector: ${selector}`);
+        return { element, platform: 'instagram' };
       }
     }
 
-    console.log('❌ Could not find comment input field');
     return null;
   }
 
-  injectComment(commentText) {
-    const commentInput = this.findCommentInput();
-    if (!commentInput) {
+  findXReplyInput() {
+    const selectors = [
+      'div[data-testid="tweetTextarea_0"]',
+      'div[data-testid*="tweetTextarea"]',
+      'div[contenteditable="true"][data-testid="tweetTextarea_0"]',
+      'div[contenteditable="true"][role="textbox"][aria-label*="Post"]',
+      'div[contenteditable="true"][role="textbox"][aria-label*="Reply"]',
+      '[aria-label*="Post your reply"]',
+      '[aria-label*="Add another Tweet"]',
+      'div[contenteditable="true"][role="textbox"]'
+    ];
+
+    for (const selector of selectors) {
+      const element = document.querySelector(selector);
+      if (element && element.offsetParent !== null) {
+        console.log(`✅ Found X reply input with selector: ${selector}`);
+        return { element, platform: 'x' };
+      }
+    }
+
+    return null;
+  }
+
+  injectComment(commentText, platform) {
+    const result = this.findCommentInput(platform);
+    if (!result) {
       this.showNotification('Could not find comment input field', 'error');
       return;
     }
 
-    // Clear existing content
-    commentInput.value = '';
-    commentInput.textContent = '';
-    
-    // Set the comment text
-    if (commentInput.tagName === 'TEXTAREA') {
-      commentInput.value = commentText;
+    const { element: commentInput, platform: detectedPlatform } = result;
+
+    if (detectedPlatform === 'x') {
+      this.injectIntoContentEditable(commentInput, commentText);
     } else {
-      commentInput.textContent = commentText;
+      this.injectIntoTextarea(commentInput, commentText);
     }
 
-    // Trigger input events to notify Instagram
-    commentInput.dispatchEvent(new Event('input', { bubbles: true }));
-    commentInput.dispatchEvent(new Event('change', { bubbles: true }));
     commentInput.focus();
 
     // Add visual indicator that this was generated
     commentInput.style.border = '2px solid #4CAF50';
     commentInput.style.backgroundColor = '#f0f8f0';
-    
-    // Show success notification
+
     this.showNotification('✅ Comment generated and inserted!', 'success');
-    
-    // Remove visual indicator after 3 seconds
+
     setTimeout(() => {
       commentInput.style.border = '';
       commentInput.style.backgroundColor = '';
     }, 3000);
   }
 
+  injectIntoTextarea(element, text) {
+    element.value = '';
+    element.value = text;
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  injectIntoContentEditable(element, text) {
+    element.focus();
+
+    // Select all content so insertText replaces it (works with React-controlled contenteditable)
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(element);
+    selection.removeAllRanges();
+    selection.addRange(range);
+
+    const success = document.execCommand('insertText', false, text);
+
+    if (!success) {
+      element.textContent = text;
+    }
+
+    element.dispatchEvent(new InputEvent('input', { bubbles: true, data: text }));
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
   showNotification(message, type) {
-    // Remove any existing notification
-    const existing = document.getElementById('ig-comment-generator-notification');
+    const existing = document.getElementById('comment-generator-notification');
     if (existing) {
       existing.remove();
     }
 
     const notification = document.createElement('div');
-    notification.id = 'ig-comment-generator-notification';
+    notification.id = 'comment-generator-notification';
     notification.innerHTML = `
       <div style="
         position: fixed;
@@ -121,8 +182,7 @@ class InstagramCommentInjector {
       </style>
     `;
     document.body.appendChild(notification);
-    
-    // Auto-remove after 4 seconds
+
     setTimeout(() => {
       notification.style.opacity = '0';
       notification.style.transition = 'opacity 0.3s ease-out';
@@ -131,11 +191,10 @@ class InstagramCommentInjector {
   }
 }
 
-// Initialize the injector
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
-    new InstagramCommentInjector();
+    new CommentInjector();
   });
 } else {
-  new InstagramCommentInjector();
+  new CommentInjector();
 }
